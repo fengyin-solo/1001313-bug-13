@@ -1,4 +1,4 @@
-"""污泥脱水接口：维护脱水机组，覆盖启动进料、开始冲洗、停机等动作。"""
+"""污泥脱水接口：维护脱水机组，覆盖登记、启动进料、开始冲洗、加药与停机。"""
 from __future__ import annotations
 
 from typing import Any
@@ -13,13 +13,20 @@ router = APIRouter(prefix="/api/sludge", tags=["污泥脱水"])
 service = SludgeService()
 
 LIST_FIELDS = ["机组编号", "所属厂站", "机组类型", "进泥量", "出泥含水率", "絮凝剂用量", "运行功率", "机组状态"]
-STATUSES = ["运行中", "待进料", "冲洗中", "停机"]
+STATUSES = ["待进料", "运行中", "冲洗中", "已停机"]
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出污泥脱水清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "sludge", "total": total, "items": items}
 
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按机组编号检索"),
-    status: str | None = Query(default=None, description="运行中、待进料、冲洗中、停机"),
+    status: str | None = Query(default=None, description="待进料、运行中、冲洗中、已停机"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
@@ -32,34 +39,27 @@ def list_entries(
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
-    """读取单条脱水机组明细；不存在时给出可读的错误说明。"""
+    """读取单条脱水机组明细；已停机的记录也能查到，但只读。不存在时给出可读的错误说明。"""
     entry = service.get_entry(entry_id)
     if entry is None:
-        raise HTTPException(status_code=404, detail=f"脱水机组 {entry_id} 不存在或已归档")
+        raise HTTPException(status_code=404, detail=f"脱水机组 {entry_id} 不存在")
     return entry
 
 
 @router.post("", response_model=ActionResult)
 def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条脱水机组，缺字段时说明原因而不是静默丢弃。"""
-    entry, missing = service.create_entry(payload.values)
-    if missing:
-        return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
-    return ActionResult(ok=True, message="脱水机组已登记", entry=entry)
-
-
-@router.post("/{entry_id}/actions", response_model=ActionResult)
-def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条脱水机组执行启动进料、开始冲洗、停机；不允许的动作会被拦下并说明原因。"""
-    action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    """登记一条脱水机组：同一机组同期只留一条在办记录，重复提交会被拦下并说明原因。"""
+    entry, message = service.create_entry(payload.values)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出污泥脱水清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "sludge", "total": total, "items": items}
+@router.post("/{entry_id}/actions", response_model=ActionResult)
+def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
+    """对单条脱水机组执行启动进料、开始冲洗、加药、停机；不允许的动作会被拦下并说明原因。"""
+    action = str(payload.values.get("action") or "").strip()
+    entry, message = service.run_action(entry_id, action, payload.values)
+    if entry is None:
+        return ActionResult(ok=False, message=message)
+    return ActionResult(ok=True, message=message, entry=entry)
