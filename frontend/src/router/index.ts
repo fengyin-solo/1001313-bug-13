@@ -7,6 +7,7 @@ const Aeration = () => import('@/views/aeration/index.vue')
 const Chemical = () => import('@/views/chemical/index.vue')
 const Sediment = () => import('@/views/sediment/index.vue')
 const Sludge = () => import('@/views/sludge/index.vue')
+const SludgeDetail = () => import('@/views/sludge/detail.vue')
 const Effluent = () => import('@/views/effluent/index.vue')
 const Labtest = () => import('@/views/labtest/index.vue')
 const Reagent = () => import('@/views/reagent/index.vue')
@@ -32,6 +33,7 @@ const router = createRouter({
     { path: '/chemical', name: 'chemical', component: Chemical },
     { path: '/sediment', name: 'sediment', component: Sediment },
     { path: '/sludge', name: 'sludge', component: Sludge },
+    { path: '/sludge/:id(\\d+)', name: 'sludge-detail', component: SludgeDetail },
     { path: '/effluent', name: 'effluent', component: Effluent },
     { path: '/labtest', name: 'labtest', component: Labtest },
     { path: '/reagent', name: 'reagent', component: Reagent },
